@@ -1,26 +1,115 @@
-# End-to-End CI/CD Pipeline on AWS
+# 🚀 End-to-End CI/CD Pipeline on AWS using Jenkins, Docker, SonarQube & Amazon EKS
 
-A portfolio project demonstrating a Java application delivery pipeline using GitHub, Jenkins, Maven, SonarQube, Docker, Amazon ECR, and Amazon EKS.
+![AWS](https://img.shields.io/badge/Cloud-AWS-orange?logo=amazonaws)
+![Jenkins](https://img.shields.io/badge/CI%2FCD-Jenkins-red?logo=jenkins)
+![Docker](https://img.shields.io/badge/Container-Docker-blue?logo=docker)
+![Kubernetes](https://img.shields.io/badge/Orchestration-Kubernetes-326CE5?logo=kubernetes)
+![Java](https://img.shields.io/badge/Language-Java-ED8B00?logo=openjdk)
+![Maven](https://img.shields.io/badge/Build-Maven-C71A36?logo=apachemaven)
+![SonarQube](https://img.shields.io/badge/Code%20Quality-SonarQube-4E9BCD?logo=sonarqube)
 
-## Pipeline
+## 📌 Project Overview
 
-1. A developer pushes code to GitHub.
-2. A GitHub webhook triggers Jenkins.
-3. Jenkins compiles and tests the Java application with Maven.
-4. SonarQube analyzes the code and the pipeline waits for the configured quality gate.
-5. Jenkins builds a Docker image and pushes a versioned image to Amazon ECR.
-6. Jenkins updates the Kubernetes Deployment on Amazon EKS and waits for rollout completion.
-7. If the deployment rollout fails, Jenkins attempts `kubectl rollout undo`.
+This project demonstrates an end-to-end Continuous Integration and Continuous Deployment (CI/CD) pipeline for a Java Spring Boot application using AWS and DevOps tools.
 
-> This repository is the application and pipeline configuration. It is not proof of a deployed AWS environment. Configure your own AWS resources and Jenkins credentials, then capture evidence of successful runs before claiming the full pipeline is operational.
+The pipeline automates source code checkout, application building, testing, static code analysis, Docker image creation, publishing container images to Amazon Elastic Container Registry (ECR), and deployment to Amazon Elastic Kubernetes Service (EKS).
 
-## Repository structure
+Jenkins orchestrates the pipeline, while SonarQube enforces a Quality Gate before the application proceeds to containerization and deployment.
+
+The application is deployed to Kubernetes and exposed through an AWS LoadBalancer Service, making its health endpoint accessible over HTTP.
+
+## 🎯 Project Objectives
+
+- Automate application build and testing with Maven.
+- Integrate SonarQube for static code analysis and Quality Gate validation.
+- Containerize the application using Docker.
+- Store versioned container images in Amazon ECR.
+- Deploy the application to Amazon EKS using Kubernetes.
+- Automate deployments through Jenkins.
+- Verify application availability using Kubernetes rollout status and an HTTP health endpoint.
+
+## 🏗️ Architecture
 
 ```text
-.
+                 Developer
+                     |
+                     v
+              GitHub Repository
+                     |
+                     v
+                  Jenkins
+                     |
+             +-------+--------+
+             |                |
+             v                v
+       Maven Build & Test   SonarQube
+             |             Code Analysis
+             |                |
+             +------- Quality Gate
+                     |
+                     v
+               Docker Build
+                     |
+                     v
+              Amazon ECR
+          Versioned Docker Images
+                     |
+                     v
+             Amazon EKS Cluster
+                     |
+                     v
+          Kubernetes Deployment
+                     |
+                     v
+              Kubernetes Pod
+                     |
+                     v
+           Kubernetes LoadBalancer
+                     |
+                     v
+             Spring Boot App
+                     |
+                     v
+                 /health
+```
+
+### Pipeline Workflow
+
+1. **Source Checkout:** Jenkins retrieves application source code and the Jenkinsfile from GitHub.
+2. **Build and Test:** Maven compiles the application and runs automated tests using `mvn clean verify`.
+3. **Code Quality Analysis:** SonarQube analyzes the source code.
+4. **Quality Gate:** Jenkins waits for the SonarQube Quality Gate and stops the pipeline if the gate does not pass.
+5. **Docker Image Build:** Jenkins builds a container image for the application.
+6. **Amazon ECR Push:** The pipeline authenticates with Amazon ECR and pushes versioned and `latest` image tags.
+7. **EKS Deployment:** Jenkins updates the Kubernetes Deployment to use the image corresponding to the current Jenkins build number.
+8. **Rollout Verification:** Jenkins waits for the Kubernetes rollout to complete successfully.
+9. **Application Validation:** The deployed application is tested through its HTTP health endpoint.
+
+## 🛠️ Technologies Used
+
+| Technology | Purpose |
+|---|---|
+| AWS EC2 | Hosts Jenkins and SonarQube for the lab |
+| AWS IAM | Provides AWS permissions to the Jenkins EC2 instance |
+| AWS ECR | Stores Docker images |
+| AWS EKS | Managed Kubernetes control plane |
+| Kubernetes | Manages application deployment, pods and services |
+| Jenkins | Automates CI/CD stages |
+| SonarQube | Static code analysis and Quality Gate |
+| Docker | Builds application container images |
+| Java | Application programming language |
+| Spring Boot | Application framework |
+| Maven | Build and test automation |
+| Git and GitHub | Source control and repository hosting |
+| AWS LoadBalancer Service | Exposes the application externally |
+
+## 📂 Repository Structure
+
+```text
+aws-cicd-pipeline/
 ├── src/
-│   ├── main/java/com/example/demo/DemoApplication.java
-│   └── test/java/com/example/demo/DemoApplicationTest.java
+│   ├── main/
+│   └── test/
 ├── k8s/
 │   ├── deployment.yaml
 │   └── service.yaml
@@ -28,81 +117,177 @@ A portfolio project demonstrating a Java application delivery pipeline using Git
 ├── Jenkinsfile
 ├── pom.xml
 ├── sonar-project.properties
-└── .gitignore
+└── README.md
 ```
 
-## Prerequisites
+## ⚙️ AWS Infrastructure
 
-- Git and a GitHub account
-- Java 17 and Maven for local testing
-- Docker
-- AWS account and AWS CLI
-- An ECR repository
-- An EKS cluster with a working `kubectl` context
-- Jenkins with Pipeline, Git, Maven/JDK, SonarQube Scanner, and Credentials plugins
-- A configured SonarQube server and a Jenkins SonarQube installation named `SonarQube`
-- Jenkins agent with AWS CLI, Docker CLI/daemon access, `kubectl`, and `jq`
+The project was implemented in the AWS Mumbai Region.
 
-## 1. Test locally
+| Resource | Configuration |
+|---|---|
+| AWS Region | `ap-south-1` |
+| ECR Repository | `aws-cicd-pipeline` |
+| EKS Cluster | `aws-cicd-cluster` |
+| EKS Node Group | `aws-cicd-workers` |
+| Kubernetes Deployment | `aws-cicd-app` |
+| Kubernetes Service | `aws-cicd-service` |
+| Application Container Port | `8080` |
+| Service Port | `80` |
+
+> **Note:** Resource names and configuration describe the lab environment. The EC2 instance, cluster, node group, load balancer, and related resources may be stopped, deleted, or recreated after the project is completed.
+
+## 🔄 Jenkins Pipeline Stages
+
+The Jenkins pipeline is defined in the `Jenkinsfile`.
+
+### 1. Checkout
+
+Checks out the source code from GitHub.
+
+### 2. Build and Test
 
 ```bash
-mvn test
-mvn package
-docker build -t aws-cicd-demo:local .
-docker run --rm -p 8080:8080 aws-cicd-demo:local
+mvn -B clean verify
 ```
 
-Open `http://localhost:8080/` or check `http://localhost:8080/health`.
+Builds the application and executes the configured Maven tests.
 
-## 2. Create AWS resources
+### 3. SonarQube Analysis
 
-Create an ECR repository and an EKS cluster in your chosen AWS region. Ensure the Jenkins agent can reach the cluster API and that its AWS IAM role has only the permissions needed for ECR access and EKS authentication. Kubernetes RBAC must also authorize the Jenkins identity to update the target namespace.
+Runs SonarQube analysis using the configured Jenkins SonarQube server and authentication token.
 
-AWS resources can incur charges. In particular, EKS control planes, worker compute, load balancers, NAT gateways, and storage can cost money. Review current AWS pricing and clean up resources when finished.
+### 4. Quality Gate
 
-Set these Jenkins environment variables (for example in the pipeline job configuration):
+The pipeline waits for the SonarQube Quality Gate. If the status is not `OK`, the pipeline fails before image creation.
 
-- `AWS_REGION` — e.g. `ap-south-1`
-- `AWS_ACCOUNT_ID` — your 12-digit AWS account ID
-- `ECR_REPOSITORY` — e.g. `aws-cicd-demo`
-- `EKS_CLUSTER_NAME` — your EKS cluster name
-- `K8S_NAMESPACE` — e.g. `default`
+### 5. Build Docker Image
 
-Do not commit AWS access keys, SonarQube tokens, kubeconfig files, or other secrets to Git. Prefer an IAM role for the Jenkins agent and short-lived credentials.
+Creates versioned and `latest` Docker image tags.
 
-## 3. Configure Jenkins
+```text
+194154437244.dkr.ecr.ap-south-1.amazonaws.com/aws-cicd-pipeline:<BUILD_NUMBER>
+```
 
-1. Install the plugins listed above.
-2. Configure the SonarQube server under **Manage Jenkins → System** with the name `SonarQube`.
-3. Create a Pipeline job pointed at this GitHub repository and select **Pipeline script from SCM** (Git).
-4. Configure the job's GitHub webhook trigger, and add a webhook to the repository pointing to your Jenkins endpoint, using the endpoint and security settings appropriate to your setup.
-5. Set the required environment variables in the job configuration.
-6. Make sure the Jenkins agent can run Docker, AWS CLI, `kubectl`, and `jq`, and that it can authenticate to EKS.
-7. Configure the SonarQube project/permissions and quality gate.
+### 6. Push to Amazon ECR
 
-The `Jenkinsfile` assumes a Jenkins agent label named `linux-docker` that has the required tools installed. Change the label to match your agent.
+Authenticates with ECR and pushes the generated image tags.
 
-## 4. Verify
+### 7. Deploy to Amazon EKS
 
-- A commit triggers a Jenkins build.
-- Maven tests pass.
-- SonarQube analysis completes and the quality gate passes.
-- A versioned image appears in ECR.
-- The Kubernetes Deployment rolls out successfully.
-- The application responds through the service endpoint appropriate to your cluster configuration.
+Updates the Kubernetes Deployment with the versioned image:
 
-The Kubernetes Service is `ClusterIP` by default to avoid exposing the demo publicly. To access it for testing, use `kubectl port-forward` or deliberately configure an ingress/load balancer with appropriate access controls.
+```bash
+kubectl set image \
+  deployment/aws-cicd-app \
+  aws-cicd-app=<ECR_IMAGE_URI>:<BUILD_NUMBER>
+```
 
-## Cleanup
+Then verifies the rollout:
 
-Delete the demo Kubernetes resources, ECR images/repository, EKS cluster, and any supporting infrastructure when you no longer need them. Verify all resources in the AWS console to avoid ongoing charges.
+```bash
+kubectl rollout status deployment/aws-cicd-app --timeout=180s
+```
 
-## Portfolio evidence checklist
+This makes each deployment traceable to its Jenkins build number.
 
-- [ ] GitHub repository with a clear README
-- [ ] Jenkins successful build screenshot
-- [ ] SonarQube quality gate screenshot
-- [ ] ECR image screenshot showing a build tag
-- [ ] `kubectl rollout status deployment/aws-cicd-demo` output
-- [ ] Application health endpoint response
-- [ ] Architecture diagram and a short explanation of the rollback behavior
+## ☸️ Kubernetes Deployment
+
+The application runs inside a Kubernetes Deployment with one replica in the lab configuration.
+
+The Kubernetes Service uses the `LoadBalancer` type to expose the application through an AWS load balancer.
+
+### Verify the Deployment
+
+```bash
+kubectl get deployments
+kubectl get pods
+kubectl get services
+```
+
+### Check the Running Image
+
+```bash
+kubectl get deployment aws-cicd-app \
+  -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}'
+```
+
+### Verify Application Health
+
+```bash
+curl -i http://<LOAD_BALANCER_DNS>/health
+```
+
+Replace `<LOAD_BALANCER_DNS>` with the external DNS name shown by:
+
+```bash
+kubectl get service aws-cicd-service
+```
+
+A successful health check should return HTTP `200` and the application's expected health response.
+
+## 🔐 Security Practices
+
+- Use an EC2 IAM role for Jenkins to access AWS services rather than hardcoding AWS access keys in the pipeline.
+- Store SonarQube authentication credentials in Jenkins credentials/configuration.
+- Keep security group access restricted to the required sources and ports.
+- Avoid committing secrets, access tokens, passwords, or private keys to GitHub.
+- Use least-privilege IAM permissions in a production environment.
+- Review and remove temporary lab permissions after testing.
+
+## 🧪 Validation and Results
+
+The project was tested with a successful Jenkins pipeline and a working EKS deployment.
+
+| Validation | Result |
+|---|---|
+| Maven build and tests | Passed |
+| SonarQube Quality Gate | Passed |
+| Docker image build | Passed |
+| Image push to Amazon ECR | Passed |
+| EKS deployment | Successful |
+| Kubernetes pod status | `Running` |
+| Ready replicas | `1/1` |
+| Kubernetes rollout | Successful |
+| Application health endpoint | HTTP `200` observed |
+
+The Jenkins build used for the final deployment was **Build #13**. The Kubernetes Deployment successfully rolled out the versioned ECR image tagged `13`.
+
+## 📚 Key Learnings
+
+Through this project, I gained practical experience with:
+
+- Designing and implementing a CI/CD pipeline using Jenkins.
+- Integrating Maven and SonarQube into automated build workflows.
+- Applying Quality Gate checks before deployment.
+- Building and publishing Docker images to Amazon ECR.
+- Configuring IAM-based AWS access for Jenkins.
+- Creating and managing an Amazon EKS cluster and worker node group.
+- Deploying applications with Kubernetes Deployments and Services.
+- Exposing a Kubernetes application using an AWS load balancer.
+- Automating Kubernetes image updates and verifying deployment rollouts.
+- Troubleshooting cloud infrastructure, container and deployment issues.
+
+## 🚀 Future Improvements
+
+- Configure GitHub webhooks for automatic builds on every push.
+- Add automated rollback when a deployment fails.
+- Introduce separate development and production environments.
+- Add HTTPS with a suitable certificate and domain name.
+- Implement monitoring and alerting with Prometheus and Grafana.
+- Replace broad temporary IAM permissions with least-privilege policies.
+- Use infrastructure as code to provision the AWS environment.
+- Add deployment notifications and pipeline reports.
+
+## 👨‍💻 Author
+
+**Akshaya Kumar M**
+
+Cloud & DevOps | AWS | Jenkins | Docker | Kubernetes | CI/CD
+
+- GitHub: [@akshxyyfht](https://github.com/akshxyyfht)
+- Project Repository: [aws-cicd-pipeline](https://github.com/akshxyyfht/aws-cicd-pipeline)
+
+---
+
+⭐ If you find this project useful, feel free to explore the repository and review the pipeline implementation.
