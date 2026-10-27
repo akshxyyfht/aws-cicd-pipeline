@@ -34,7 +34,7 @@ pipeline {
                 withSonarQubeEnv("${SONAR_SERVER}") {
                     sh '''
                         mvn -B \
-                          org.sonarsource.scannermaven:sonar-maven-plugin:5.0.0.4389:sonar \
+                          org.sonarsource.scanner.maven:sonar-maven-plugin:5.0.0.4389:sonar \
                           -Dsonar.projectKey="$SONAR_PROJECT_KEY" \
                           -Dsonar.host.url="$SONAR_HOST_URL" \
                           -Dsonar.token="$SONAR_AUTH_TOKEN"
