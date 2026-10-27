@@ -1,4 +1,3 @@
-
 pipeline {
     agent any
 
@@ -9,15 +8,17 @@ pipeline {
     }
 
     environment {
-        AWS_REGION       = 'ap-south-1'
-        AWS_ACCOUNT_ID   = '194154437244'
-        ECR_REPOSITORY   = 'aws-cicd-pipeline'
+        AWS_REGION        = 'ap-south-1'
+        AWS_ACCOUNT_ID    = '194154437244'
+        ECR_REPOSITORY    = 'aws-cicd-pipeline'
         SONAR_PROJECT_KEY = 'aws-cicd-pipeline'
-        SONAR_SERVER     = 'SonarQube'
+        SONAR_SERVER      = 'SonarQube'
+        EKS_CLUSTER       = 'aws-cicd-cluster'
+        K8S_DEPLOYMENT    = 'aws-cicd-app'
+        K8S_CONTAINER     = 'aws-cicd-app'
     }
 
     stages {
-
         stage('Checkout') {
             steps {
                 checkout scm
@@ -34,7 +35,6 @@ pipeline {
         stage('SonarQube Analysis') {
             steps {
                 echo 'Running SonarQube analysis...'
-
                 withSonarQubeEnv("${SONAR_SERVER}") {
                     sh '''
                         mvn -B \
@@ -53,11 +53,9 @@ pipeline {
                 timeout(time: 5, unit: 'MINUTES') {
                     script {
                         def qg = waitForQualityGate()
-
                         if (qg.status != 'OK') {
                             error "Quality Gate failed: ${qg.status}"
                         }
-
                         echo "Quality Gate passed: ${qg.status}"
                     }
                 }
@@ -70,9 +68,8 @@ pipeline {
                     env.IMAGE_URI =
                         "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}"
 
-                    echo "Building Docker image: ${IMAGE_URI}:${BUILD_NUMBER}"
-
                     sh '''
+                        set -e
                         docker build \
                           -t "$IMAGE_URI:$BUILD_NUMBER" \
                           -t "$IMAGE_URI:latest" \
@@ -86,22 +83,43 @@ pipeline {
             steps {
                 sh '''
                     set -e
-
-                    echo "Checking AWS identity..."
                     aws sts get-caller-identity
 
-                    echo "Logging in to Amazon ECR..."
                     aws ecr get-login-password --region "$AWS_REGION" \
                       | docker login \
                           --username AWS \
                           --password-stdin \
                           "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
 
-                    echo "Pushing build image..."
                     docker push "$IMAGE_URI:$BUILD_NUMBER"
-
-                    echo "Pushing latest image..."
                     docker push "$IMAGE_URI:latest"
+                '''
+            }
+        }
+
+        stage('Deploy to EKS') {
+            steps {
+                sh '''
+                    set -e
+
+                    echo "Updating kubeconfig for EKS..."
+                    aws eks update-kubeconfig \
+                      --name "$EKS_CLUSTER" \
+                      --region "$AWS_REGION"
+
+                    echo "Deploying image: $IMAGE_URI:$BUILD_NUMBER"
+                    kubectl set image \
+                      "deployment/$K8S_DEPLOYMENT" \
+                      "$K8S_CONTAINER=$IMAGE_URI:$BUILD_NUMBER"
+
+                    echo "Waiting for rollout..."
+                    kubectl rollout status \
+                      "deployment/$K8S_DEPLOYMENT" \
+                      --timeout=180s
+
+                    echo "Checking deployment status..."
+                    kubectl get deployment "$K8S_DEPLOYMENT"
+                    kubectl get pods -l app=aws-cicd-app
                 '''
             }
         }
@@ -118,11 +136,11 @@ pipeline {
         }
 
         success {
-            echo 'CI pipeline completed successfully!'
+            echo 'CI/CD pipeline completed successfully!'
         }
 
         failure {
-            echo 'CI pipeline failed. Check the stage logs above.'
+            echo 'Pipeline failed. Check the stage logs above.'
         }
     }
 }
