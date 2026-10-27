@@ -9,14 +9,15 @@ pipeline {
     }
 
     environment {
-        AWS_REGION = 'ap-south-1'
-        AWS_ACCOUNT_ID = '194154437244'
-        ECR_REPOSITORY = 'aws-cicd-pipeline'
+        AWS_REGION       = 'ap-south-1'
+        AWS_ACCOUNT_ID   = '194154437244'
+        ECR_REPOSITORY   = 'aws-cicd-pipeline'
         SONAR_PROJECT_KEY = 'aws-cicd-pipeline'
-        SONAR_SERVER = 'SonarQube'
+        SONAR_SERVER     = 'SonarQube'
     }
 
     stages {
+
         stage('Checkout') {
             steps {
                 checkout scm
@@ -25,12 +26,15 @@ pipeline {
 
         stage('Build and Test') {
             steps {
+                echo 'Building the application and running tests...'
                 sh 'mvn -B clean verify'
             }
         }
 
         stage('SonarQube Analysis') {
             steps {
+                echo 'Running SonarQube analysis...'
+
                 withSonarQubeEnv("${SONAR_SERVER}") {
                     sh '''
                         mvn -B \
@@ -44,33 +48,59 @@ pipeline {
             }
         }
 
+        stage('Quality Gate') {
+            steps {
+                timeout(time: 5, unit: 'MINUTES') {
+                    script {
+                        def qg = waitForQualityGate()
+
+                        if (qg.status != 'OK') {
+                            error "Quality Gate failed: ${qg.status}"
+                        }
+
+                        echo "Quality Gate passed: ${qg.status}"
+                    }
+                }
+            }
+        }
+
         stage('Build Docker Image') {
             steps {
-                sh '''
-                    set -eu
+                script {
+                    env.IMAGE_URI =
+                        "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}"
 
-                    IMAGE_URI="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY"
+                    echo "Building Docker image: ${IMAGE_URI}:${BUILD_NUMBER}"
 
-                    docker build -t "$IMAGE_URI:$BUILD_NUMBER" .
-                    docker tag "$IMAGE_URI:$BUILD_NUMBER" "$IMAGE_URI:latest"
-                '''
+                    sh '''
+                        docker build \
+                          -t "$IMAGE_URI:$BUILD_NUMBER" \
+                          -t "$IMAGE_URI:latest" \
+                          .
+                    '''
+                }
             }
         }
 
         stage('Push to Amazon ECR') {
             steps {
                 sh '''
-                    set -eu
+                    set -e
 
-                    ECR_REGISTRY="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
-                    IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY"
-
+                    echo "Checking AWS identity..."
                     aws sts get-caller-identity
 
+                    echo "Logging in to Amazon ECR..."
                     aws ecr get-login-password --region "$AWS_REGION" \
-                      | docker login --username AWS --password-stdin "$ECR_REGISTRY"
+                      | docker login \
+                          --username AWS \
+                          --password-stdin \
+                          "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
 
+                    echo "Pushing build image..."
                     docker push "$IMAGE_URI:$BUILD_NUMBER"
+
+                    echo "Pushing latest image..."
                     docker push "$IMAGE_URI:latest"
                 '''
             }
@@ -78,18 +108,21 @@ pipeline {
     }
 
     post {
+        always {
+            sh '''
+                docker logout \
+                  "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com" \
+                  >/dev/null 2>&1 || true
+            '''
+            echo "Pipeline finished. Build: ${BUILD_NUMBER}"
+        }
+
         success {
-            echo 'Build, tests, SonarQube analysis, and ECR push completed successfully.'
+            echo 'CI pipeline completed successfully!'
         }
 
         failure {
-            echo 'Pipeline failed. Review the stage logs above to identify the cause.'
-        }
-
-        always {
-            sh '''
-                docker logout "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com" || true
-            '''
+            echo 'CI pipeline failed. Check the stage logs above.'
         }
     }
 }
