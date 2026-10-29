@@ -17,6 +17,8 @@ pipeline {
         K8S_DEPLOYMENT  = 'aws-cicd-app'
         K8S_SERVICE     = 'aws-cicd-service'
         APP_NAME        = 'aws-cicd-app'
+        SONAR_PROJECT_KEY = 'aws-cicd-pipeline'
+        SONAR_SERVER      = 'SonarQube'
     }
 
     stages {
@@ -35,6 +37,7 @@ pipeline {
                     command -v kubectl
                     command -v eksctl
                     command -v mvn
+                    command -v curl
 
                     aws sts get-caller-identity
                     aws configure get region || true
@@ -45,6 +48,36 @@ pipeline {
         stage('Build and Test') {
             steps {
                 sh 'mvn -B clean verify'
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv("${SONAR_SERVER}") {
+                    sh '''
+                        set -eu
+
+                        mvn -B sonar:sonar \
+                          -Dsonar.projectKey="$SONAR_PROJECT_KEY" \
+                          -Dsonar.projectName="$SONAR_PROJECT_KEY"
+                    '''
+                }
+            }
+        }
+
+        stage('SonarQube Quality Gate') {
+            steps {
+                timeout(time: 10, unit: 'MINUTES') {
+                    script {
+                        def qualityGate = waitForQualityGate()
+
+                        if (qualityGate.status != 'OK') {
+                            error "SonarQube Quality Gate failed: ${qualityGate.status}"
+                        }
+
+                        echo "SonarQube Quality Gate passed."
+                    }
+                }
             }
         }
 
@@ -246,6 +279,7 @@ EOF
                     set -eu
 
                     echo "Waiting for the external LoadBalancer address..."
+                    APP_HOST=""
 
                     for attempt in $(seq 1 30); do
                         APP_HOST=$(kubectl get service "$K8S_SERVICE" \
@@ -258,7 +292,7 @@ EOF
                         sleep 10
                     done
 
-                    if [ -z "${APP_HOST:-}" ]; then
+                    if [ -z "$APP_HOST" ]; then
                         echo "LoadBalancer address is not ready yet."
                         kubectl describe service "$K8S_SERVICE"
                         exit 1
@@ -277,7 +311,7 @@ EOF
 
     post {
         success {
-            echo 'CI/CD SUCCESS: image pushed and application deployed.'
+            echo 'CI/CD SUCCESS: Quality Gate passed, image pushed, and application deployed.'
         }
 
         failure {
